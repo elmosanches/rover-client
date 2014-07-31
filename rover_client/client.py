@@ -1,6 +1,6 @@
 import sys
-from urlparse import urlparse
-from twisted.web import server, resource
+
+from twisted.python import log
 from twisted.internet import reactor
 from twisted.internet.protocol import ClientFactory, Protocol
 from twisted.internet.serialport import SerialPort
@@ -12,10 +12,10 @@ class ArduinoProtocol(LineReceiver):
     server = None
 
     def connectionMade(self):
-        print 'Arduino device: ', self, ' is connected.'
+        log.msg('Arduino device: %s is connected', self)
 
     def lineReceived(self, line):
-        print "line received from arduino: ",line
+        log.msg("line received from arduino: ", line)
 
         #send it to server
         self.server.sendLine(line)
@@ -25,24 +25,30 @@ class ServerProtocol(LineReceiver):
 
     def __init__(self, factory):
         self.factory = factory
-        self.factory.arduino = arduino
         self.factory.arduino.server = self
 
     def lineReceived(self, line):
-        print "line received from server: ",line
+        log.msg("line received from server: ", line)
 
         #TODO validate line
+        #check for error communicates from server
+
+        if line.startswith('SE:'):
+            log.err('ERROR: {}'.format(line))
+            return
 
         #send valid line to arduino
         self.factory.arduino.sendLine(line)
+        log.msg('sent to arduino %s', line)
 
     def connectionMade(self):
-        self.sendLine("DC:rover01")
+        self.sendLine("DC:{}".format(self.factory.device_name))
 
 
 class ServerFactory(ClientFactory):
 
-    def __init__(self, arduino):
+    def __init__(self, name, arduino):
+        self.device_name = name
         self.arduino = arduino
 
     def buildProtocol(self, addr):
@@ -50,16 +56,19 @@ class ServerFactory(ClientFactory):
         return p
 
     def clientConnectionFailed(self, connector, reason):
-        print "connection faile"
-        print reason
+        log.err("connection faile: %s", reason)
 
     def clientConnectionLost(self, connector, reason):
-        print "connection was lost"
-        print reason
+        log.err("connection was lost: %s", reason)
+
         reactor.stop()
 
 
 if __name__ == '__main__':
+    log.startLogging(sys.stdout)
+
+    DEVICE_NAME = 'rover01'
+
     SERVER_ADDRESS = 'localhost'
     # SERVER_ADDRESS = '37.59.112.176'
     SERVER_PORT = 8123
@@ -69,7 +78,7 @@ if __name__ == '__main__':
     SerialPort(arduino, '/dev/ttyUSB0', reactor, baudrate='9600')
 
     # create factory protocol and application
-    server_factory = ServerFactory(arduino)
+    server_factory = ServerFactory(DEVICE_NAME, arduino)
 
     # connect factory to this host and port
     reactor.connectTCP(SERVER_ADDRESS, SERVER_PORT, server_factory)
