@@ -64,7 +64,7 @@ class ServerFactory(ClientFactory):
         reactor.stop()
 
 
-if __name__ == '__main__':
+def main():
     log.startLogging(sys.stdout)
 
     DEVICE_NAME = 'rover01'
@@ -84,3 +84,6 @@ if __name__ == '__main__':
     reactor.connectTCP(SERVER_ADDRESS, SERVER_PORT, server_factory)
 
     reactor.run()
+
+if __name__ == '__main__':
+    main()

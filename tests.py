@@ -1,8 +1,8 @@
 from twisted.trial import unittest
 from twisted.test import proto_helpers
 
-from client import ServerFactory
-from client import ArduinoProtocol
+from rover_client.client import ServerFactory
+from rover_client.client import ArduinoProtocol
 
 
 class MockArduino:

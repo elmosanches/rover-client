@@ -15,4 +15,10 @@ setup(
         "Topic :: RC Rover Utilities",
         "License :: OSI Approved :: BSD License",
     ],
+    entry_points={
+        'console_scripts': [
+            'rover_client = rover_client.client:main',
+        ]
+    },
+    install_requires=['twisted', 'pyserial']
 )
