@@ -37,10 +37,10 @@ class ServerFactoryTest(unittest.TestCase):
     def test_lineRecived(self):
 
         END_LINE = '\r\n'
-        REQUEST = '0:0:0' + END_LINE
-        EXPECTED = REQUEST[:-len(END_LINE)]
+        REQUEST = 'RE:0:0:0' + END_LINE
+        ARDUINO_EXPECTED = '0:0:0'
         self.proto.dataReceived(REQUEST)
-        self.assertEqual(self.mock_arduino.sent_lines[0], EXPECTED)
+        self.assertEqual(self.mock_arduino.sent_lines[0], ARDUINO_EXPECTED)
 
 
 class ArduinoProtocolTest(unittest.TestCase):
@@ -62,6 +62,6 @@ class ArduinoProtocolTest(unittest.TestCase):
 
         END_LINE = '\r\n'
         REQUEST = '0:0:0' + END_LINE
-        EXPECTED = REQUEST[:-len(END_LINE)]
+        SERVER_EXPECTED = 'RE:0:0:0'
         self.proto.dataReceived(REQUEST)
-        self.assertEqual(self.mock_server.sent_lines[0], EXPECTED)
+        self.assertEqual(self.mock_server.sent_lines[0], SERVER_EXPECTED)
