@@ -8,32 +8,51 @@ from twisted.internet.serialport import SerialPort
 from twisted.protocols.basic import LineReceiver
 
 
-#@TODO
-"""
--detect arudino failure
--communicate arduino failure to connected endpoint
-"""
-
-
 class ArduinoProtocol(LineReceiver):
 
     server = None
+    serial_port = None
+    connected = False
+
+    TIMEOUT = 1.0
+
+    def __init__(self, server_protocol):
+        self.server = server_protocol
+        self._connect_serial_port()
 
     def connectionMade(self):
         log.msg('Arduino device: %s is connected', self)
+
+    def connectionLost(self, reason):
+        log.msg('Arduino device: %s disconnected', self)
+        self.server.sendLine('RE:-1:-100:0')
+        self.serial_port.loseConnection()
+
+        # self._timeout = reactor.callLater(self.TIMEOUT, self.try_reconnect)
 
     def lineReceived(self, line):
         log.msg("line received from arduino: ", line)
 
         #send it to server
-        self.server.sendLine('RE:' + line)
+        if self.server is not None:
+            self.server.sendLine('RE:' + line)
+
+    def try_reconnect(self):
+        self._connect_serial_port()
+
+    def _connect_serial_port(self):
+        try:
+            self.serial_port = SerialPort(self, '/dev/ttyUSB0',
+                                        reactor, baudrate='9600')
+        except Exception as e:
+            log.err("Cannot connect to serial port: ", e)
+            self._timeout = reactor.callLater(self.TIMEOUT, self.try_reconnect)
 
 
 class ServerProtocol(LineReceiver):
 
     def __init__(self, factory):
         self.factory = factory
-        self.factory.arduino.server = self
 
     def lineReceived(self, line):
         log.msg("line received from server: ", line)
@@ -54,6 +73,11 @@ class ServerProtocol(LineReceiver):
 
     def connectionMade(self):
         self.sendLine("DC:{}".format(self.factory.device_name))
+        self.arduino = ArduinoProtocol(self)
+
+    def connectionLost(self, reason):
+        #stop motor
+        self.arduino.sendLine('0:1:1')
 
     def get_command(self, line):
         return line[:2]
@@ -64,23 +88,30 @@ class ServerProtocol(LineReceiver):
 
 class ServerFactory(ClientFactory):
 
-    def __init__(self, name, arduino):
+    def __init__(self, name):
         self.device_name = name
-        self.arduino = arduino
 
     def buildProtocol(self, addr):
         p = ServerProtocol(self)
         return p
 
     def clientConnectionFailed(self, connector, reason):
-        log.err("connection faile: %s", reason)
+        self.connector = connector
+
+        log.err("connection failed: ", reason)
+        self._timeout = reactor.callLater(1, self.try_reconnect)
+        # connector.connect()
 
     def clientConnectionLost(self, connector, reason):
-        log.err("connection was lost: %s", reason)
+        self.connector = connector
+        log.err("connection was lost: ", reason)
 
-        reactor.stop()
-        #@TODO
-        # attempt to reconnect every 'reconnect time'
+        self._timeout = reactor.callLater(1, self.try_reconnect)
+
+    def try_reconnect(self):
+        if self.connector.state == 'disconnected':
+            self.connector.connect()
+            self._timeout = reactor.callLater(1, self.try_reconnect)
 
 
 def main():
@@ -95,11 +126,8 @@ def main():
     SERVER_PORT = int(args.server_address.split(':')[1])
     DEVICE_NAME = args.device_name
 
-    arduino = ArduinoProtocol()
-    SerialPort(arduino, '/dev/ttyUSB0', reactor, baudrate='9600')
-
     # create factory protocol and application
-    server_factory = ServerFactory(DEVICE_NAME, arduino)
+    server_factory = ServerFactory(DEVICE_NAME)
 
     # connect factory to this host and port
     reactor.connectTCP(SERVER_ADDRESS, SERVER_PORT, server_factory)
