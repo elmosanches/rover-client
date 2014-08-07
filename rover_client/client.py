@@ -64,9 +64,19 @@ class ServerProtocol(LineReceiver):
             log.err('ERROR: {}'.format(line))
             return
 
+        if command == 'DC':
+            if body == 'E_11':
+                log.err('ERROR: refused selected name {}. Name already taken'.format(self.factory.device_name))
+            elif body == 'E_12':
+                log.err('ERROR: refused selected name {}. Inwalid characters'.format(self.factory.device_name))
+            else:
+                log.err('ERROR: refused selected name {} for unknown reqson'.format(self.factory.device_name))
+
+            reactor.stop()
+
         elif command == 'RE':
             #send valid line to arduino
-            self.factory.arduino.sendLine(body)
+            self.arduino.sendLine(body)
             log.msg('sent to arduino %s', body)
         else:
             log.err('unsupported command EROOR {}'.format(line))
